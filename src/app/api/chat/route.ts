@@ -16,9 +16,20 @@ const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  // Verificar autenticación
+  // Verificar autenticación (Soporte Híbrido: Supabase + Cookie Bypass)
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Verificar Bypass Cookie
+  const cookieHeader = req.headers.get('cookie') || '';
+  const hasBypassCookie = cookieHeader.includes('ecomia_bypass=true');
+
+  // Si no hay usuario Y no hay bypass, rechazar (opcional, por ahora permitimos chat abierto si falla auth)
+  // Pero para 'createStore' si exigiremos user o marcaremos un usuario temporal
+  const effectiveUserId = user?.id || (hasBypassCookie ? 'dev-bypass-user' : null);
+  
+  // Si decidimos bloquear chat a no logueados:
+  // if (!effectiveUserId) return new Response('Unauthorized', { status: 401 });
 
   const systemPrompt = `
     Eres EcomIA, un consultor experto en comercio electrónico y emprendimiento digital para LATAM.
@@ -79,15 +90,23 @@ export async function POST(req: Request) {
           slug: z.string().describe('Un identificador único para la URL (basado en el nombre, sin espacios, minúsculas)'),
         }),
         execute: async ({ name, description, slug }) => {
-          if (!user) {
+          if (!effectiveUserId) {
             return 'Error: Debes iniciar sesión para crear una tienda.';
           }
 
           try {
+            // Si es usuario bypass, simulamos éxito o usamos un ID de desarrollo si la tabla lo permite
+            // Nota: Si la DB tiene FK constraint en user_id, esto fallará para bypass user a menos que insertemos un usuario dummy.
+            // Por ahora, asumimos que bypass es solo para chat/research, no para escritura DB real si hay constraints.
+            
+            if (effectiveUserId === 'dev-bypass-user') {
+                 return `¡Modo Desarrollo! (Bypass activo). Simulación: He creado tu tienda "${name}" exitosamente. (No guardado en DB real por seguridad).`;
+            }
+
             const { data, error } = await supabase
               .from('stores')
               .insert({
-                user_id: user.id,
+                user_id: effectiveUserId,
                 name,
                 description,
                 slug,
