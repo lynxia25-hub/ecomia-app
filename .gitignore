@@ -31,11 +31,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-# .env.local - COMENTADO PARA PERMITIR SUBIDA A GITHUB (Necesario para Codespaces)
+.env*
+# .env.local - Ignorado por seguridad, usar generate-env.js en cloud
 
 
 # vercel

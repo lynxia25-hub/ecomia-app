@@ -18,12 +18,12 @@ const ResearchDisplay = dynamic(
 );
 
 export default function ChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, append, isLoading } = useChat({
     api: '/api/chat',
     maxSteps: 5, // Enable multi-step tool calls on the client
     onError: (error) => {
       console.error("Chat error:", error);
-      alert("Ocurrió un error en el chat. Por favor intenta de nuevo.");
+      // alert("Ocurrió un error en el chat. Por favor intenta de nuevo."); // Comentado para evitar interrupciones molestas
     }
   });
 
@@ -49,6 +49,7 @@ export default function ChatPage() {
           input={input}
           handleInputChange={handleInputChange}
           handleSubmit={handleSubmit}
+          append={append}
           isLoading={isLoading}
         />
       </div>

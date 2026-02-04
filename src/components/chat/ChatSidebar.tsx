@@ -15,6 +15,7 @@ interface ChatSidebarProps {
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => void;
+  append?: (message: any) => Promise<string | null | undefined>; // Usamos any para flexibilidad con versiones de SDK
   isLoading: boolean;
 }
 
@@ -23,6 +24,7 @@ export function ChatSidebar({
   input, 
   handleInputChange, 
   handleSubmit, 
+  append,
   isLoading 
 }: ChatSidebarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -33,7 +35,12 @@ export function ChatSidebar({
 
   // Sincronizar estado local con el prop input (ej. cuando se limpia tras enviar)
   useEffect(() => {
-    setLocalInput(input || '');
+    // Solo sincronizamos si input está vacío (limpieza externa) o si es diferente
+    // Evitamos sobrescribir lo que el usuario escribe si hay lag en el prop input
+    if (input === '' && localInput !== '') {
+       // Si el input externo se limpió, limpiamos el local
+       setLocalInput('');
+    }
   }, [input]);
 
   useEffect(() => {
@@ -47,9 +54,31 @@ export function ChatSidebar({
     const newValue = e.target.value;
     setLocalInput(newValue); // Actualización visual inmediata
     
-    // Propagar al hook de AI
+    // Propagar al hook de AI (opcional pero mantenemos compatibilidad)
     if (handleInputChange) {
       handleInputChange(e);
+    }
+  };
+
+  // Manejador de envío personalizado usando append para evitar dependencias de estado asíncrono
+  const handleLocalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!localInput.trim() || isLoading) return;
+
+    const content = localInput;
+    setLocalInput(''); // Limpieza inmediata UI
+
+    if (append) {
+      try {
+        await append({ role: 'user', content });
+      } catch (error) {
+        console.error("Error al enviar mensaje:", error);
+        setLocalInput(content); // Restaurar si falla
+      }
+    } else {
+      // Fallback a handleSubmit tradicional si no hay append
+      handleSubmit(e);
     }
   };
 
@@ -130,7 +159,7 @@ export function ChatSidebar({
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 bg-gray-50">
+      <form onSubmit={handleLocalSubmit} className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all shadow-sm">
           <input
             value={localInput}
