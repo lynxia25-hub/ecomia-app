@@ -33,6 +33,14 @@ export function ChatSidebar({
     }
   }, [messages]);
 
+  // Wrapper para asegurar que el evento se maneje correctamente
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Aseguramos que handleInputChange exista antes de llamarlo
+    if (handleInputChange) {
+      handleInputChange(e);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-50 border-l border-gray-200 shadow-xl">
       <div className="p-4 border-b border-gray-200 bg-gray-100 flex items-center justify-between">
@@ -114,7 +122,7 @@ export function ChatSidebar({
         <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all shadow-sm">
           <input
             value={input || ''}
-            onChange={handleInputChange}
+            onChange={handleInput}
             placeholder="Escribe tu idea..."
             autoComplete="off"
             className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none text-gray-900 placeholder:text-gray-500"
