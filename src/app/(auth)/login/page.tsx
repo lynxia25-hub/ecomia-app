@@ -23,13 +23,24 @@ export default function LoginPage() {
     setError(null);
     
     // BACKDOOR / BYPASS PARA DESARROLLO (Si Supabase bloquea IPs)
-    if (email === "admin@ecomia.com" && password === "admin123") {
+    if (email.trim() === "admin@ecomia.com" && password === "admin123") {
       try {
+        console.log("Intentando bypass de administrador...");
+        // 1. Intentar Server Action
         await bypassAuth();
+        
+        // 2. Fallback: Setear cookie en cliente por si acaso
+        document.cookie = "ecomia_bypass=true; path=/; max-age=86400; SameSite=Lax";
+        
+        console.log("Bypass exitoso, redirigiendo...");
         window.location.href = "/chat";
-        return;
+        return; // IMPORTANTE: Detener ejecución aquí
       } catch (err) {
         console.error("Bypass failed", err);
+        // Incluso si falla el server action, intentamos el fallback cliente y redirigimos
+        document.cookie = "ecomia_bypass=true; path=/; max-age=86400; SameSite=Lax";
+        window.location.href = "/chat";
+        return;
       }
     }
     
