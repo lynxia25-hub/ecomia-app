@@ -1,7 +1,7 @@
 'use client';
 
 import { Send, Bot, User } from 'lucide-react';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { EcomAgentLogo } from '@/components/ui/EcomAgentLogo';
 
 interface Message {
@@ -26,6 +26,15 @@ export function ChatSidebar({
   isLoading 
 }: ChatSidebarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // SOLUCIÓN DEFINITIVA: Estado local para control inmediato del input
+  // Esto evita bloqueos si el hook useChat tarda en responder
+  const [localInput, setLocalInput] = useState(input || '');
+
+  // Sincronizar estado local con el prop input (ej. cuando se limpia tras enviar)
+  useEffect(() => {
+    setLocalInput(input || '');
+  }, [input]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -33,9 +42,12 @@ export function ChatSidebar({
     }
   }, [messages]);
 
-  // Wrapper para asegurar que el evento se maneje correctamente
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Aseguramos que handleInputChange exista antes de llamarlo
+  // Manejador robusto de cambios
+  const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setLocalInput(newValue); // Actualización visual inmediata
+    
+    // Propagar al hook de AI
     if (handleInputChange) {
       handleInputChange(e);
     }
@@ -121,15 +133,17 @@ export function ChatSidebar({
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all shadow-sm">
           <input
-            value={input || ''}
-            onChange={handleInput}
+            value={localInput}
+            onChange={handleLocalChange}
             placeholder="Escribe tu idea..."
             autoComplete="off"
-            className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none text-gray-900 placeholder:text-gray-500"
+            disabled={false} // Forzamos habilitado siempre
+            style={{ cursor: 'text' }} // Forzamos cursor de texto
+            className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none text-gray-900 placeholder:text-gray-500 cursor-text"
           />
           <button
             type="submit"
-            disabled={isLoading || !input || input.trim().length === 0}
+            disabled={isLoading || !localInput || localInput.trim().length === 0}
             title={isLoading ? "Enviando..." : "Enviar mensaje"}
             className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
           >
