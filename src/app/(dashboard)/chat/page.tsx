@@ -18,14 +18,25 @@ const ResearchDisplay = dynamic(
 );
 
 export default function ChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, append, isLoading } = useChat({
+  const chat = useChat({
     api: '/api/chat',
     maxSteps: 5, // Enable multi-step tool calls on the client
     onError: (error) => {
       console.error("Chat error:", error);
-      // alert("Ocurrió un error en el chat. Por favor intenta de nuevo."); // Comentado para evitar interrupciones molestas
     }
   });
+
+  const { messages, input, handleInputChange, handleSubmit, append, isLoading } = chat;
+
+  // Wrapper para garantizar envío
+  const handleSendMessage = async (content: string) => {
+    if (append) {
+      return append({ role: 'user', content });
+    }
+    // Fallback loco si append no existe (no debería pasar si el hook inicializa)
+    console.warn("Append no disponible, intentando handleSubmit manual no soportado en este wrapper");
+    return undefined;
+  };
 
   // Extract all tool invocations from assistant messages
   const toolInvocations = messages
@@ -49,7 +60,7 @@ export default function ChatPage() {
           input={input}
           handleInputChange={handleInputChange}
           handleSubmit={handleSubmit}
-          append={append}
+          sendMessage={handleSendMessage} // Pasamos nuestro wrapper robusto
           isLoading={isLoading}
         />
       </div>

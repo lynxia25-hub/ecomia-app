@@ -15,7 +15,8 @@ interface ChatSidebarProps {
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => void;
-  append?: (message: any) => Promise<string | null | undefined>; // Usamos any para flexibilidad con versiones de SDK
+  sendMessage?: (content: string) => Promise<any>; // Nuevo prop robusto
+  append?: (message: any) => Promise<string | null | undefined>; // Deprecado a favor de sendMessage, pero mantenido por compatibilidad
   isLoading: boolean;
 }
 
@@ -24,21 +25,18 @@ export function ChatSidebar({
   input, 
   handleInputChange, 
   handleSubmit, 
+  sendMessage,
   append,
   isLoading 
 }: ChatSidebarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // SOLUCIÓN DEFINITIVA: Estado local para control inmediato del input
-  // Esto evita bloqueos si el hook useChat tarda en responder
   const [localInput, setLocalInput] = useState(input || '');
 
-  // Sincronizar estado local con el prop input (ej. cuando se limpia tras enviar)
+  // Sincronizar estado local con el prop input
   useEffect(() => {
-    // Solo sincronizamos si input está vacío (limpieza externa) o si es diferente
-    // Evitamos sobrescribir lo que el usuario escribe si hay lag en el prop input
     if (input === '' && localInput !== '') {
-       // Si el input externo se limpió, limpiamos el local
        setLocalInput('');
     }
   }, [input]);
@@ -49,18 +47,15 @@ export function ChatSidebar({
     }
   }, [messages]);
 
-  // Manejador robusto de cambios
   const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    setLocalInput(newValue); // Actualización visual inmediata
-    
-    // Propagar al hook de AI (opcional pero mantenemos compatibilidad)
+    setLocalInput(newValue);
     if (handleInputChange) {
       handleInputChange(e);
     }
   };
 
-  // Manejador de envío personalizado usando append para evitar dependencias de estado asíncrono
+  // Manejador de envío ULTRA ROBUSTO
   const handleLocalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -69,16 +64,26 @@ export function ChatSidebar({
     const content = localInput;
     setLocalInput(''); // Limpieza inmediata UI
 
-    if (append) {
-      try {
+    try {
+      if (sendMessage) {
+        await sendMessage(content);
+      } else if (append) {
         await append({ role: 'user', content });
-      } catch (error) {
-        console.error("Error al enviar mensaje:", error);
-        setLocalInput(content); // Restaurar si falla
+      } else if (handleSubmit) {
+        // Fallback legacy (aunque propenso a errores si el evento no coincide)
+        // Recreamos un evento sintético si es necesario, pero handleSubmit espera un FormEvent real usualmente
+        // Aquí asumimos que handleSubmit viene del hook useChat y maneja el estado interno 'input'
+        // PERO como hemos limpiado localInput, debemos asegurarnos que 'input' del hook esté actualizado
+        // Esto es arriesgado, por eso preferimos sendMessage/append.
+        handleSubmit(e);
+      } else {
+        console.error("No hay método de envío disponible");
+        setLocalInput(content); // Restaurar
+        alert("Error: El sistema de chat no está listo. Recarga la página.");
       }
-    } else {
-      // Fallback a handleSubmit tradicional si no hay append
-      handleSubmit(e);
+    } catch (error) {
+      console.error("Error al enviar mensaje:", error);
+      setLocalInput(content); // Restaurar si falla
     }
   };
 
