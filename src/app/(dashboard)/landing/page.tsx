@@ -1,80 +1,44 @@
-'use client';
+import { listLandingPages } from '@/app/actions/landing-pages';
+import { listStores } from '@/app/actions/stores';
+import LandingCard from '@/components/landing/LandingCard';
+import LandingCreateForm from '@/components/landing/LandingCreateForm';
+import PuterLandingGenerator from '@/components/landing/PuterLandingGenerator';
 
-import { useState } from "react";
-import { ensureAuth, aiChat, fsWrite, getPuter } from "@/lib/puter/client";
-
-export default function LandingGeneratorPage() {
-  const [product, setProduct] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const generate = async () => {
-    setError(null);
-    setUrl(null);
-    setBusy(true);
-    const ok = await ensureAuth();
-    if (!ok) {
-      setError("Activa recursos del usuario");
-      setBusy(false);
-      return;
-    }
-    const prompt =
-      `Crea HTML simple de una landing para ${product} con título, beneficios y CTA. Usa estilo básico y español coloquial.`;
-    const html = await aiChat(prompt, { model: "gpt-4o-mini" });
-    if (!html) {
-      setError("No se pudo generar contenido");
-      setBusy(false);
-      return;
-    }
-    const dir = `ecomia-landing-${Math.random().toString(36).slice(2, 8)}`;
-    const okWrite = await fsWrite(`${dir}/index.html`, html);
-    if (!okWrite) {
-      setError("Error escribiendo archivo");
-      setBusy(false);
-      return;
-    }
-    try {
-      const p = getPuter();
-      if (!p || !p.hosting) {
-        setError("SDK no disponible");
-      } else {
-        const sub = `ecomia-${Math.random().toString(36).slice(2, 8)}`;
-        const site = await p.hosting.create(sub, dir);
-        setUrl(`https://${site.subdomain}.puter.site`);
-      }
-    } catch {
-      setError("Error publicando sitio");
-    } finally {
-      setBusy(false);
-    }
-  };
+export default async function LandingGeneratorPage() {
+  const result = await listLandingPages();
+  const landingPages = 'landingPages' in result ? result.landingPages : [];
+  const storeResult = await listStores();
+  const stores = 'stores' in storeResult ? storeResult.stores.map((store) => ({
+    id: store.id,
+    name: store.name,
+  })) : [];
 
   return (
-    <div className="min-h-screen p-6 max-w-2xl mx-auto space-y-4">
-      <h1 className="text-2xl font-semibold">Generador de Landing (Puter)</h1>
-      <p className="text-sm text-zinc-600">Piloto con recursos del usuario en Puter.</p>
-      <div className="flex gap-2">
-        <input
-          value={product}
-          onChange={(e) => setProduct(e.target.value)}
-          placeholder="Producto (ej: Botella térmica)"
-          className="flex-1 rounded-full px-4 py-2 border"
-        />
-        <button
-          onClick={generate}
-          disabled={busy || !product}
-          className="rounded-full bg-blue-600 text-white px-6 py-2"
-        >
-          {busy ? "Generando…" : "Generar"}
-        </button>
-      </div>
-      {url && (
-        <div className="text-green-700">
-          Sitio publicado: <a className="underline" href={url} target="_blank">{url}</a>
+    <div className="min-h-screen p-6 space-y-10">
+      <div className="max-w-3xl space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold">Landing Pages</h1>
+          <p className="text-sm text-gray-500">Crea y administra tus landing pages.</p>
         </div>
-      )}
-      {error && <div className="text-red-700">{error}</div>}
+
+        <LandingCreateForm stores={stores} />
+
+        {landingPages.length === 0 ? (
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-8 text-center border border-dashed border-gray-300 dark:border-gray-700">
+            <p className="text-gray-500">No tienes landing pages creadas aun.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {landingPages.map((landing) => (
+              <LandingCard key={landing.id} landing={landing} stores={stores} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-3xl">
+        <PuterLandingGenerator />
+      </div>
     </div>
   );
 }

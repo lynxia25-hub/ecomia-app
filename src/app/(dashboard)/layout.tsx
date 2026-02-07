@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -9,6 +9,8 @@ import {
   LayoutDashboard, 
   Store, 
   Settings, 
+  Bot,
+  ArrowLeft,
   Menu, 
   X, 
   LogOut, 
@@ -18,6 +20,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { ToastProvider } from "@/components/ui/ToastProvider";
+import PillLink from "@/components/ui/PillLink";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -40,9 +44,31 @@ const sidebarItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "Investigacion",
+    href: "/research",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Agentes",
+    href: "/agents",
+    icon: Bot,
+  },
+  {
     title: "Configuración",
     href: "/settings",
     icon: Settings,
+  },
+  {
+    title: "Admin Agentes",
+    href: "/admin/agents",
+    icon: Bot,
+    adminOnly: true,
+  },
+  {
+    title: "Admin Roles",
+    href: "/admin/roles",
+    icon: User,
+    adminOnly: true,
   },
 ];
 
@@ -52,8 +78,22 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    const loadAdminStatus = async () => {
+      try {
+        const res = await fetch('/api/admin/me');
+        const data = await res.json();
+        setIsAdmin(Boolean(data?.isAdmin));
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+    loadAdminStatus();
+  }, []);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -90,7 +130,7 @@ export default function DashboardLayout({
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
-          {sidebarItems.map((item) => {
+          {sidebarItems.filter((item) => !item.adminOnly || isAdmin).map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
@@ -144,7 +184,23 @@ export default function DashboardLayout({
         {/* Content Scroll Area */}
         <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
-            {children}
+            {pathname !== "/dashboard" && (
+              <div className="mb-4">
+                <PillLink
+                  href="/dashboard"
+                  variant="neutral"
+                  size="sm"
+                  startIcon={
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+                      <ArrowLeft size={14} />
+                    </span>
+                  }
+                >
+                  Volver al panel de control
+                </PillLink>
+              </div>
+            )}
+            <ToastProvider>{children}</ToastProvider>
           </div>
         </div>
       </main>

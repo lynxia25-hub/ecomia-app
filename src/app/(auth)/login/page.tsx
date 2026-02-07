@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
-import { Loader2, Mail, ArrowRight, CheckCircle2, Lock, UserPlus, LogIn } from "lucide-react";
+import { Loader2, Mail, ArrowRight, CheckCircle2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EcomAgentLogo } from "@/components/ui/EcomAgentLogo";
-import { bypassAuth } from "@/app/actions/auth-bypass";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,28 +21,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
-    // BACKDOOR / BYPASS PARA DESARROLLO (Si Supabase bloquea IPs)
-    if (email.trim() === "admin@ecomia.com" && password === "admin123") {
-      try {
-        console.log("Intentando bypass de administrador...");
-        // 1. Intentar Server Action
-        await bypassAuth();
-        
-        // 2. Fallback: Setear cookie en cliente por si acaso
-        document.cookie = "ecomia_bypass=true; path=/; max-age=86400; SameSite=Lax";
-        
-        console.log("Bypass exitoso, redirigiendo...");
-        window.location.href = "/chat";
-        return; // IMPORTANTE: Detener ejecución aquí
-      } catch (err) {
-        console.error("Bypass failed", err);
-        // Incluso si falla el server action, intentamos el fallback cliente y redirigimos
-        document.cookie = "ecomia_bypass=true; path=/; max-age=86400; SameSite=Lax";
-        window.location.href = "/chat";
-        return;
-      }
-    }
     
     try {
       const supabase = createClient();
@@ -81,8 +59,9 @@ export default function LoginPage() {
       } else {
         setSent(true);
       }
-    } catch (err: any) {
-      let message = err.message || "Ocurrió un error.";
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message : "Ocurrió un error.";
+      let message = rawMessage || "Ocurrió un error.";
       if (message.includes("rate limit") || message.includes("Rate limit") || message.includes("too many requests")) {
         message = "Has excedido el límite de intentos. Usa el inicio con contraseña o espera 60 segundos.";
       } else if (message.includes("Invalid login credentials")) {
@@ -99,10 +78,13 @@ export default function LoginPage() {
       {/* Left Side - Visual & Branding */}
       <div className="hidden lg:flex w-1/2 bg-black relative overflow-hidden items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-90 z-10" />
-        <img 
-          src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" 
-          alt="Background" 
-          className="absolute inset-0 w-full h-full object-cover opacity-50"
+        <Image
+          src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop"
+          alt="Background"
+          fill
+          priority
+          sizes="(min-width: 1024px) 50vw, 100vw"
+          className="absolute inset-0 object-cover opacity-50"
         />
         
         <div className="relative z-20 p-12 text-white max-w-xl">

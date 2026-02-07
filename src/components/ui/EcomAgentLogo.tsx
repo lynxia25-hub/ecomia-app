@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Sparkles, Zap } from 'lucide-react';
+import { Bot, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface EcomAgentLogoProps {
