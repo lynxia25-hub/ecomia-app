@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import MercadoPagoCheckoutButton from '@/components/payments/MercadoPagoCheckoutButton';
 
 type StoreRow = {
   id: string;
@@ -91,6 +92,10 @@ export default async function PublicStorePage({
   const shippingNote = typeof store.meta?.shipping_note === 'string'
     ? store.meta.shipping_note
     : '';
+  const checkout = (store.meta?.checkout || {}) as Record<string, unknown>;
+  const checkoutEnabled = Boolean(checkout.enabled);
+  const checkoutPrice = typeof checkout.price_cop === 'number' ? checkout.price_cop : 0;
+  const hasCheckout = checkoutEnabled && checkoutPrice > 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 relative overflow-hidden">
@@ -130,9 +135,17 @@ export default async function PublicStorePage({
               {extractStoreTagline(store.meta || {})}
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <button className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900">
-                Ver catalogo
-              </button>
+              {hasCheckout ? (
+                <MercadoPagoCheckoutButton
+                  storeId={store.id}
+                  label="Comprar ahora"
+                  className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900"
+                />
+              ) : (
+                <button className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900">
+                  Ver catalogo
+                </button>
+              )}
               {isOwner && (
                 <Link
                   href="/stores"

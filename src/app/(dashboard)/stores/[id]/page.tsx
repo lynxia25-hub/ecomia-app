@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import DomainWizard from '@/components/stores/DomainWizard';
+import CheckoutSettingsPanel from '@/components/stores/CheckoutSettingsPanel';
 import GuidedStoreEditor from '@/components/stores/GuidedStoreEditor';
 import PaymentsWizard from '@/components/stores/PaymentsWizard';
 import ReadyChecklist from '@/components/stores/ReadyChecklist';
@@ -40,13 +41,15 @@ export default async function StoreDetailPage({
   const meta = (store.meta || {}) as Record<string, unknown>;
   const domain = (meta.domain || {}) as Record<string, unknown>;
   const payments = (meta.payments || {}) as Record<string, unknown>;
+  const domainStatus = typeof domain.status === 'string' ? domain.status : '';
+  const paymentsStatus = typeof payments.status === 'string' ? payments.status : '';
 
   const hasStoreSlug = Boolean(store.slug);
   const hasActiveStore = store.status === 'active';
   const hasLanding = Boolean(landingPages && landingPages.length > 0);
   const hasPublishedLanding = Boolean(landingPages?.some((landing) => landing.status === 'published'));
-  const hasDomain = typeof domain.name === 'string' && Boolean(domain.name);
-  const hasPayments = Boolean(payments.provider || payments.status === 'active');
+  const hasDomain = Boolean(domain.name) && (domainStatus === 'verified' || domainStatus === 'needs_purchase');
+  const hasPayments = paymentsStatus === 'active';
 
   return (
     <div className="space-y-6">
@@ -103,6 +106,8 @@ export default async function StoreDetailPage({
       />
 
       <GuidedStoreEditor storeId={store.id} meta={meta} />
+
+      <CheckoutSettingsPanel storeId={store.id} meta={meta} />
 
       <DomainWizard storeId={store.id} meta={meta} />
 

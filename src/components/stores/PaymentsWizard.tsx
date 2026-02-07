@@ -37,10 +37,12 @@ export default function PaymentsWizard({ storeId, meta }: PaymentsWizardProps) {
 
   const defaults = useMemo(() => {
     const payments = (meta.payments ?? {}) as Record<string, unknown>;
+    const mp = (payments.mercadopago ?? {}) as Record<string, unknown>;
     return {
       provider: getString(payments.provider) || 'mercadopago',
       status: getString(payments.status) || 'pending',
       email: getString(payments.account_email),
+      mpPublicKey: getString(mp.public_key),
     };
   }, [meta]);
 
@@ -108,11 +110,33 @@ export default function PaymentsWizard({ storeId, meta }: PaymentsWizardProps) {
           />
         </label>
 
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">MP Access Token</span>
+            <input
+              name="mp_access_token"
+              type="password"
+              placeholder="TEST-xxxxxx"
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-300 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">MP Public Key</span>
+            <input
+              name="mp_public_key"
+              defaultValue={defaults.mpPublicKey}
+              placeholder="TEST-xxxxxx"
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-300 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            />
+          </label>
+        </div>
+
         <div className="rounded-2xl border border-dashed border-amber-200 bg-white/70 p-4 text-xs text-slate-600 dark:border-amber-500/20 dark:bg-slate-950/60 dark:text-slate-300">
           <p className="font-semibold text-slate-800 dark:text-white">Checklist rapido</p>
           <p className="mt-2">1) Crea tu cuenta en la pasarela.</p>
           <p>2) Comparte el email o ID de la cuenta.</p>
           <p>3) Cuando este activo, marca el estado como "Activo".</p>
+          <p className="mt-2">Tus credenciales se guardan cifradas.</p>
         </div>
 
         {state?.error && (

@@ -839,7 +839,19 @@ No menciones herramientas ni el proceso. Responde solo con el contenido.
       const title = `Landing ${candidateName}`;
       const baseSlug = slugify(title || candidateName);
       const slug = await ensureLandingSlug(baseSlug || `landing-${Date.now().toString().slice(-4)}`);
-      const content = { raw: result.text || '', kind: 'landing' };
+      const content = {
+        raw: result.text || '',
+        kind: 'landing',
+        product: {
+          candidate_id: selectedCandidateId,
+          name: candidateName,
+          source: 'research',
+        },
+        checkout: {
+          enabled: false,
+          source: 'research',
+        },
+      };
 
       await writeClient
         .from('product_assets')
@@ -929,7 +941,7 @@ No menciones herramientas ni el proceso. Responde solo con el contenido.
         return 'fallback_monitor';
       }
       if (/(recomienda|mejor|opcion|opciones|comparar|tabla)/.test(text)) {
-        return 'recommendation';
+        return 'research';
       }
       return 'research';
     })();
@@ -954,7 +966,9 @@ Responde solo con la clave exacta.
       } as any);
 
       const selected = String(routingResult.text || '').trim();
-      if (availableKeys.includes(selected)) {
+      if (selected === 'recommendation') {
+        intent = 'research';
+      } else if (availableKeys.includes(selected)) {
         intent = selected;
       }
     } catch (err) {
@@ -962,14 +976,40 @@ Responde solo con la clave exacta.
     }
 
     try {
-      const context = await tvly.search(`tendencia ${seedQuery} LATAM`, {
-        searchDepth: "advanced",
-        maxResults: 5,
+      const queries = [
+        `tendencias ${seedQuery} Colombia`,
+        `proveedor ${seedQuery} Colombia precio`,
+        `Mercado Libre Colombia ${seedQuery}`,
+        `dropshipping ${seedQuery} proveedor`,
+      ];
+
+      const results = await Promise.all(
+        queries.map((query) =>
+          tvly.search(query, {
+            searchDepth: 'advanced',
+            maxResults: 5,
+          })
+        )
+      );
+
+      const mergedResults: Array<Record<string, unknown>> = [];
+      const seenUrls = new Set<string>();
+
+      results.forEach((context) => {
+        const contextResults = Array.isArray((context as { results?: unknown }).results)
+          ? ((context as { results: Array<Record<string, unknown>> }).results)
+          : [];
+
+        contextResults.forEach((item) => {
+          const url = typeof item.url === 'string' ? item.url : '';
+          if (url && seenUrls.has(url)) return;
+          if (url) seenUrls.add(url);
+          mergedResults.push(item);
+        });
       });
-      researchContext = JSON.stringify(context);
-      if (Array.isArray((context as { results?: unknown }).results)) {
-        researchResults = (context as { results: Array<Record<string, unknown>> }).results;
-      }
+
+      researchResults = mergedResults.slice(0, 12);
+      researchContext = JSON.stringify({ results: researchResults });
 
       if (activeSessionId && effectiveUserId && researchResults.length > 0) {
         const payload = researchResults.slice(0, 6).map((result) => ({
@@ -1144,8 +1184,17 @@ No menciones herramientas ni el proceso. Responde solo con el contenido.
       });
     }
 
+    const sourcesList = researchResults
+      .slice(0, 6)
+      .map((result, index) => {
+        const title = typeof result.title === 'string' ? result.title : 'Fuente';
+        const url = typeof result.url === 'string' ? result.url : '';
+        return `${index + 1}. ${title}${url ? ` (${url})` : ''}`;
+      })
+      .join('\n');
+
     const recommendationPrompt = `
-Eres ProductRecommendationAgent para LATAM.
+  Eres SourcingYRecomendacionAgent para LATAM.
 Idea/producto: "${seedQuery}"
 Contexto de investigacion: ${researchContext}
 
@@ -1153,13 +1202,23 @@ Contexto de investigacion: ${researchContext}
   ${orchestratorPrompt}
 
   Instrucciones del agente:
-  ${getAgentPrompt('recommendation')}
+  ${getAgentPrompt('research')}
+
+  Fuentes reales disponibles:
+${sourcesList || 'Sin fuentes con link disponibles.'}
 
   Responde SIEMPRE con:
   1) Tabla Markdown (primera linea de la respuesta) con encabezado exacto:
 | Producto | Demanda | Competencia | Margen | Proveedor | Recomendacion |
-2) 2-3 bullets de recomendacion
+2) 2-3 bullets de recomendacion con al menos 1 link real
 3) 1 pregunta final corta para avanzar
+
+Reglas:
+- Genera minimo 3 filas en la tabla.
+- No dejes celdas vacias; si falta info usa "dato no disponible".
+- Usa proveedores reales de la lista de fuentes cuando existan.
+- Si no hay proveedor con link, escribe "dato no disponible".
+- No inventes precios. Si no hay precio, usa "dato no disponible".
 
 No menciones herramientas ni el proceso.
 `;
@@ -1169,6 +1228,33 @@ No menciones herramientas ni el proceso.
       system: recommendationPrompt,
       messages,
     } as any);
+
+    const buildFallbackTable = () => {
+      const rows = researchResults.slice(0, 3).map((source) => {
+        const url = typeof source.url === 'string' ? source.url : '';
+        const host = url ? new URL(url).hostname : 'dato no disponible';
+        return `| ${seedQuery} | Media | Media | dato no disponible | ${host} | Validar proveedor y precio |`;
+      });
+
+      if (rows.length === 0) return '';
+      return [
+        '| Producto | Demanda | Competencia | Margen | Proveedor | Recomendacion |',
+        '| --- | --- | --- | --- | --- | --- |',
+        ...rows,
+      ].join('\n');
+    };
+
+    const parsedTable = parseMarkdownTable(result.text || '');
+    const needsFallback = !parsedTable || parsedTable.rows.length < 2;
+    let responseText = result.text || '';
+    if (needsFallback) {
+      const table = buildFallbackTable();
+      responseText = [
+        table,
+        '\n- Recomendacion: revisa proveedores con link real.\n- Recomendacion: confirma costos locales.\n',
+        '¿Quieres que compare otra opcion o seguimos con este producto?'
+      ].join('\n');
+    }
 
     if (activeSessionId && effectiveUserId) {
       const { count } = await writeClient
@@ -1220,7 +1306,7 @@ No menciones herramientas ni el proceso.
       }
     }
 
-    return new Response(JSON.stringify({ content: result.text, debug: isDev ? debugInfo : undefined }), {
+    return new Response(JSON.stringify({ content: responseText, debug: isDev ? debugInfo : undefined }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }

@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import GuidedLandingEditor from '@/components/landing/GuidedLandingEditor';
+import CheckoutSettingsPanel from '@/components/landing/CheckoutSettingsPanel';
+import PublishLandingPanel from '@/components/landing/PublishLandingPanel';
 import PillLink from '@/components/ui/PillLink';
 
 export default async function LandingDetailPage({
@@ -90,6 +92,15 @@ export default async function LandingDetailPage({
 {JSON.stringify(landing.content || {}, null, 2)}
         </pre>
       </div>
+
+      <PublishLandingPanel
+        landingId={landing.id}
+        title={landing.title}
+        status={landing.status}
+        content={landing.content || {}}
+      />
+
+      <CheckoutSettingsPanel landingId={landing.id} content={landing.content || {}} />
 
       <GuidedLandingEditor landingId={landing.id} content={landing.content || {}} />
     </div>

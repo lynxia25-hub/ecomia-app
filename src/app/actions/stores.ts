@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { resolve4, resolveCname } from 'node:dns/promises';
+import { encryptString } from '@/lib/crypto';
 import { createClient } from '@/lib/supabase/server';
 
 type StoreRow = {
@@ -57,6 +59,58 @@ function normalizePaymentProvider(value?: string | null) {
   if (!raw) return null;
   const allowed = new Set(['stripe', 'mercadopago', 'payu', 'manual', 'other']);
   return allowed.has(raw) ? raw : null;
+}
+
+function normalizePrice(value?: string | null) {
+  const raw = value?.replace(/[^0-9.,]/g, '').replace(',', '.') || '';
+  if (!raw) return null;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
+function normalizePrice(value?: string | null) {
+  if (!value) return null;
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  if (!cleaned) return null;
+  const price = Number(cleaned);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  return Math.round(price);
+}
+
+function buildPricingOptions(formData: FormData) {
+  const options = [] as Array<{ id: string; name: string; price: number }>;
+  for (let index = 1; index <= 3; index += 1) {
+    const name = String(formData.get(`pricing_name_${index}`) || '').trim();
+    const priceRaw = String(formData.get(`pricing_price_${index}`) || '').trim();
+    const price = normalizePrice(priceRaw);
+    if (!name || !price) continue;
+    const id = `option_${index}`;
+    options.push({ id, name, price });
+  }
+  return options;
+}
+
+async function checkDomainDns(domain: string, target: string) {
+  const normalizedTarget = target.trim().toLowerCase().replace(/\.$/, '');
+  const checks = [] as string[];
+
+  try {
+    const cnames = await resolveCname(domain);
+    checks.push(...cnames.map((value) => value.toLowerCase().replace(/\.$/, '')));
+    if (checks.includes(normalizedTarget)) return true;
+  } catch (error) {
+    // Ignore CNAME lookup errors and try A record next.
+  }
+
+  try {
+    const addresses = await resolve4(domain);
+    if (addresses.includes('76.76.21.21')) return true;
+  } catch (error) {
+    // Ignore A record lookup errors.
+  }
+
+  return false;
 }
 
 export async function listStores() {
@@ -454,6 +508,71 @@ export async function updateStoreDomainStatusFromForm(
   return { ok: true } as GuidedStoreFormState;
 }
 
+export async function verifyStoreDomainDnsFromForm(
+  _prevState: GuidedStoreFormState,
+  formData: FormData
+) {
+  const id = String(formData.get('id') || '').trim();
+
+  if (!id) {
+    return { error: 'Missing store id' } as GuidedStoreFormState;
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' } as GuidedStoreFormState;
+
+  const { data: store, error: storeError } = await supabase
+    .from('stores')
+    .select('id, meta')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (storeError) return { error: 'Failed to load store' } as GuidedStoreFormState;
+  if (!store) return { error: 'Not found' } as GuidedStoreFormState;
+
+  const existingMeta = asRecord(store.meta) || {};
+  const existingDomain = asRecord(existingMeta.domain) || {};
+  const domainName = typeof existingDomain.name === 'string' ? existingDomain.name : '';
+  const dnsTarget = typeof existingDomain.dns_target === 'string'
+    ? existingDomain.dns_target
+    : 'storefront.ecomia.app';
+
+  if (!domainName) {
+    return { error: 'Primero agrega tu dominio' } as GuidedStoreFormState;
+  }
+
+  const isValid = await checkDomainDns(domainName, dnsTarget);
+  const nextDomain = {
+    ...existingDomain,
+    status: isValid ? 'verified' : 'pending',
+    dns_target: dnsTarget,
+    last_check_at: new Date().toISOString(),
+    last_check_ok: isValid,
+    verified_at: isValid ? new Date().toISOString() : existingDomain.verified_at || null,
+  };
+
+  const nextMeta = {
+    ...existingMeta,
+    domain: nextDomain,
+  };
+
+  const { error } = await supabase
+    .from('stores')
+    .update({ meta: nextMeta })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) return { error: 'Failed to verify domain' } as GuidedStoreFormState;
+
+  revalidatePath('/stores');
+  return isValid
+    ? ({ ok: true } as GuidedStoreFormState)
+    : ({ error: 'DNS aun no apunta al destino esperado' } as GuidedStoreFormState);
+}
+
 export async function updateStorePaymentsFromForm(
   _prevState: GuidedStoreFormState,
   formData: FormData
@@ -462,6 +581,9 @@ export async function updateStorePaymentsFromForm(
   const providerRaw = String(formData.get('payment_provider') || '').trim();
   const accountEmailRaw = String(formData.get('payment_email') || '').trim();
   const statusRaw = String(formData.get('payment_status') || '').trim();
+  const mpAccessTokenRaw = String(formData.get('mp_access_token') || '').trim();
+  const mpPublicKeyRaw = String(formData.get('mp_public_key') || '').trim();
+  const pricingOptions = buildPricingOptions(formData);
 
   if (!id) {
     return { error: 'Missing store id' } as GuidedStoreFormState;
@@ -497,15 +619,34 @@ export async function updateStorePaymentsFromForm(
 
   const existingMeta = asRecord(store.meta) || {};
   const existingPayments = asRecord(existingMeta.payments) || {};
+  const existingMp = asRecord(existingPayments.mercadopago) || {};
+
+  let mpAccessTokenEncrypted = existingMp.access_token_enc || null;
+  if (mpAccessTokenRaw) {
+    try {
+      mpAccessTokenEncrypted = encryptString(mpAccessTokenRaw);
+    } catch (error) {
+      return { error: 'No se pudo cifrar el token. Configura APP_ENCRYPTION_KEY.' } as GuidedStoreFormState;
+    }
+  }
+
+  const mpPublicKey = mpPublicKeyRaw || existingMp.public_key || null;
 
   const nextPayments = {
     ...existingPayments,
     provider,
     status,
     account_email: accountEmail,
+    pricing_options: pricingOptions.length > 0 ? pricingOptions : existingPayments.pricing_options || [],
     connected_at: status === 'active'
       ? new Date().toISOString()
       : existingPayments.connected_at || null,
+    mercadopago: {
+      ...existingMp,
+      access_token_enc: mpAccessTokenEncrypted,
+      public_key: mpPublicKey,
+      updated_at: new Date().toISOString(),
+    },
   };
 
   const nextMeta = {
@@ -520,6 +661,66 @@ export async function updateStorePaymentsFromForm(
     .eq('user_id', user.id);
 
   if (error) return { error: 'Failed to update payments' } as GuidedStoreFormState;
+
+  revalidatePath('/stores');
+  return { ok: true } as GuidedStoreFormState;
+}
+
+export async function updateStoreCheckoutFromForm(
+  _prevState: GuidedStoreFormState,
+  formData: FormData
+) {
+  const id = String(formData.get('id') || '').trim();
+  if (!id) {
+    return { error: 'Missing store id' } as GuidedStoreFormState;
+  }
+
+  const enabled = String(formData.get('checkout_enabled') || '') === 'on';
+  const priceRaw = String(formData.get('checkout_price') || '').trim();
+  const productName = String(formData.get('checkout_product') || '').trim();
+  const source = String(formData.get('checkout_source') || '').trim();
+
+  const price = priceRaw ? normalizePrice(priceRaw) : null;
+  if (priceRaw && !price) {
+    return { error: 'Precio invalido' } as GuidedStoreFormState;
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' } as GuidedStoreFormState;
+
+  const { data: store, error: storeError } = await supabase
+    .from('stores')
+    .select('id, meta')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (storeError) return { error: 'Failed to load store' } as GuidedStoreFormState;
+  if (!store) return { error: 'Not found' } as GuidedStoreFormState;
+
+  const existingMeta = asRecord(store.meta) || {};
+  const existingCheckout = asRecord(existingMeta.checkout) || {};
+
+  const nextMeta = {
+    ...existingMeta,
+    checkout: {
+      ...existingCheckout,
+      enabled,
+      price_cop: price ?? existingCheckout.price_cop ?? null,
+      product_name: productName || existingCheckout.product_name || '',
+      source: source || existingCheckout.source || 'manual',
+    },
+  };
+
+  const { error } = await supabase
+    .from('stores')
+    .update({ meta: nextMeta })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) return { error: 'Failed to update checkout' } as GuidedStoreFormState;
 
   revalidatePath('/stores');
   return { ok: true } as GuidedStoreFormState;

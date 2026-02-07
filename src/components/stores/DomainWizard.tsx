@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { GuidedStoreFormState } from '@/app/actions/stores';
-import { updateStoreDomainFromForm, updateStoreDomainStatusFromForm } from '@/app/actions/stores';
+import { updateStoreDomainFromForm, updateStoreDomainStatusFromForm, verifyStoreDomainDnsFromForm } from '@/app/actions/stores';
 import { useToast } from '@/components/ui/ToastProvider';
 
 type DomainWizardProps = {
@@ -46,9 +46,11 @@ function getString(value: unknown) {
 export default function DomainWizard({ storeId, meta }: DomainWizardProps) {
   const [state, formAction] = useActionState(updateStoreDomainFromForm, initialState);
   const [verifyState, verifyAction] = useActionState(updateStoreDomainStatusFromForm, initialState);
+  const [dnsState, dnsAction] = useActionState(verifyStoreDomainDnsFromForm, initialState);
   const { toast } = useToast();
   const lastRef = useRef<{ ok?: boolean; error?: string }>({});
   const lastVerifyRef = useRef<{ ok?: boolean; error?: string }>({});
+  const lastDnsRef = useRef<{ ok?: boolean; error?: string }>({});
 
   const defaults = useMemo(() => {
     const domain = (meta.domain ?? {}) as Record<string, unknown>;
@@ -57,6 +59,9 @@ export default function DomainWizard({ storeId, meta }: DomainWizardProps) {
       mode: getString(domain.mode) || 'connect',
       provider: getString(domain.provider) || 'other',
       status: getString(domain.status),
+      dnsTarget: getString(domain.dns_target) || 'storefront.ecomia.app',
+      lastCheckAt: getString(domain.last_check_at),
+      lastCheckOk: Boolean(domain.last_check_ok),
     };
   }, [meta]);
 
@@ -81,6 +86,17 @@ export default function DomainWizard({ storeId, meta }: DomainWizardProps) {
       lastVerifyRef.current.ok = true;
     }
   }, [verifyState, toast]);
+
+  useEffect(() => {
+    if (dnsState?.error && dnsState.error !== lastDnsRef.current.error) {
+      toast({ title: 'DNS no validado', description: dnsState.error, tone: 'error' });
+      lastDnsRef.current.error = dnsState.error;
+    }
+    if (dnsState?.ok && !lastDnsRef.current.ok) {
+      toast({ title: 'DNS verificado', tone: 'success' });
+      lastDnsRef.current.ok = true;
+    }
+  }, [dnsState, toast]);
 
   return (
     <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50/60 p-6 shadow-sm dark:border-indigo-500/20 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-900/20">
@@ -138,7 +154,7 @@ export default function DomainWizard({ storeId, meta }: DomainWizardProps) {
           <p className="font-semibold text-slate-800 dark:text-white">Siguiente paso recomendado</p>
           <p className="mt-2">
             Si conectas tu dominio, crea un registro CNAME apuntando a
-            <span className="font-semibold"> storefront.ecomia.app</span>.
+            <span className="font-semibold"> {defaults.dnsTarget}</span>.
             Luego avisas y lo verificamos contigo.
           </p>
           <p className="mt-2">
@@ -172,11 +188,21 @@ export default function DomainWizard({ storeId, meta }: DomainWizardProps) {
             Cuando termines de configurar DNS, confirma aqui para marcar el dominio como
             listo y seguir con el lanzamiento.
           </p>
+          {defaults.lastCheckAt && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              Ultima verificacion: {new Date(defaults.lastCheckAt).toLocaleString()} ({defaults.lastCheckOk ? 'OK' : 'Pendiente'})
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input type="hidden" name="domain_status" value="verification_requested" />
           <VerifyButton label="Solicitar verificacion" />
         </div>
+      </form>
+
+      <form action={dnsAction} className="mt-3 flex items-center gap-3">
+        <input type="hidden" name="id" value={storeId} />
+        <VerifyButton label="Validar DNS ahora" />
       </form>
 
       <form action={verifyAction} className="mt-3 flex items-center gap-3">

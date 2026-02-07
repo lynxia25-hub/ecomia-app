@@ -113,7 +113,23 @@ function extractMarkdownTable(text?: string) {
 
   if (header.length === 0 || bodyRows.length === 0) return null;
 
-  return { header, rows: bodyRows };
+  const normalizedHeader = header.length >= defaultHeader.length ? header : defaultHeader;
+  const normalizedRows = bodyRows
+    .map((row) => {
+      const next = [...row];
+      while (next.length < normalizedHeader.length) {
+        next.push('dato no disponible');
+      }
+      if (next.length > normalizedHeader.length) {
+        return next.slice(0, normalizedHeader.length);
+      }
+      return next;
+    })
+    .filter((row) => row.some((cell) => cell && cell.toLowerCase() !== 'dato no disponible'));
+
+  if (normalizedRows.length === 0) return null;
+
+  return { header: normalizedHeader, rows: normalizedRows };
 }
 
 function extractCopySections(text?: string) {

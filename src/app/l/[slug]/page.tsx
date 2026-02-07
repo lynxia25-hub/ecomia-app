@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import MercadoPagoCheckoutButton from '@/components/payments/MercadoPagoCheckoutButton';
 
 type LandingRow = {
   id: string;
@@ -92,6 +93,8 @@ export default async function PublicLandingPage({
   const hero = (content.hero || {}) as Record<string, unknown>;
   const theme = (content.theme || {}) as Record<string, unknown>;
   const media = (content.media || {}) as Record<string, unknown>;
+  const legal = (content.legal || {}) as Record<string, unknown>;
+  const checkout = (content.checkout || {}) as Record<string, unknown>;
 
   const heroTitle = typeof hero.title === 'string' && hero.title.trim()
     ? hero.title.trim()
@@ -102,6 +105,15 @@ export default async function PublicLandingPage({
     : 'Comprar ahora';
   const accent = typeof theme.accent === 'string' ? theme.accent : '';
   const heroImage = typeof media.hero_image_url === 'string' ? media.hero_image_url : '';
+  const checkoutEnabled = Boolean(checkout.enabled);
+  const checkoutPrice = typeof checkout.price_cop === 'number' ? checkout.price_cop : 0;
+  const hasCheckout = checkoutEnabled && checkoutPrice > 0;
+  const legalBusiness = typeof legal.business_name === 'string' ? legal.business_name : '';
+  const legalEmail = typeof legal.contact_email === 'string' ? legal.contact_email : '';
+  const legalTermsUrl = typeof legal.terms_url === 'string' ? legal.terms_url : '';
+  const legalPrivacyUrl = typeof legal.privacy_url === 'string' ? legal.privacy_url : '';
+  const legalRefundUrl = typeof legal.refund_url === 'string' ? legal.refund_url : '';
+  const legalNotice = typeof legal.notice === 'string' ? legal.notice : '';
 
   const landingText = extractLandingText(content);
   const highlights = extractHighlights(landingText);
@@ -151,12 +163,20 @@ export default async function PublicLandingPage({
               {heroSubtitle || landingText.split('\n').filter(Boolean)[0] || 'Contenido listo para convertir visitas en ventas.'}
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900"
-                style={accent ? { backgroundColor: accent } : undefined}
-              >
-                {heroCta}
-              </button>
+              {hasCheckout ? (
+                <MercadoPagoCheckoutButton
+                  landingId={landing.id}
+                  label={heroCta}
+                  className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900"
+                />
+              ) : (
+                <button
+                  className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-slate-900"
+                  style={accent ? { backgroundColor: accent } : undefined}
+                >
+                  {heroCta}
+                </button>
+              )}
               {isOwner && (
                 <Link
                   href="/landing"
@@ -203,6 +223,35 @@ export default async function PublicLandingPage({
           </aside>
         </div>
       </main>
+
+      {(legalBusiness || legalEmail || legalTermsUrl || legalPrivacyUrl || legalRefundUrl || legalNotice) && (
+        <footer className="relative z-10 border-t border-slate-800 bg-slate-950/80 px-6 py-8 text-xs text-slate-400">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              {legalBusiness && <p className="font-semibold text-slate-200">{legalBusiness}</p>}
+              {legalEmail && <p>Contacto: {legalEmail}</p>}
+              {legalNotice && <p>{legalNotice}</p>}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {legalTermsUrl && (
+                <a className="hover:text-white" href={legalTermsUrl} target="_blank" rel="noreferrer">
+                  Terminos
+                </a>
+              )}
+              {legalPrivacyUrl && (
+                <a className="hover:text-white" href={legalPrivacyUrl} target="_blank" rel="noreferrer">
+                  Privacidad
+                </a>
+              )}
+              {legalRefundUrl && (
+                <a className="hover:text-white" href={legalRefundUrl} target="_blank" rel="noreferrer">
+                  Devoluciones
+                </a>
+              )}
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

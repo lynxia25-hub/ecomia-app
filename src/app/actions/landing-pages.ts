@@ -306,6 +306,21 @@ function normalizeUrl(value?: string | null) {
   return raw;
 }
 
+function normalizeEmail(value?: string | null) {
+  const raw = value?.trim().toLowerCase() || '';
+  if (!raw) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return null;
+  return raw;
+}
+
+function normalizePrice(value?: string | null) {
+  const raw = value?.replace(/[^0-9.,]/g, '').replace(',', '.') || '';
+  if (!raw) return null;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
 export async function updateLandingGuidedFromForm(
   _prevState: GuidedLandingFormState,
   formData: FormData
@@ -376,6 +391,166 @@ export async function updateLandingGuidedFromForm(
     .eq('user_id', user.id);
 
   if (error) return { error: 'Failed to update landing content' } as GuidedLandingFormState;
+
+  revalidatePath('/landing');
+  return { ok: true } as GuidedLandingFormState;
+}
+
+export async function publishLandingFromForm(
+  _prevState: GuidedLandingFormState,
+  formData: FormData
+) {
+  const id = String(formData.get('id') || '').trim();
+  if (!id) {
+    return { error: 'Missing landing id' } as GuidedLandingFormState;
+  }
+
+  const seoTitle = String(formData.get('seo_title') || '').trim();
+  const seoDescription = String(formData.get('seo_description') || '').trim();
+  const legalBusiness = String(formData.get('legal_business') || '').trim();
+  const legalEmailRaw = String(formData.get('legal_email') || '').trim();
+  const legalTermsRaw = String(formData.get('legal_terms_url') || '').trim();
+  const legalPrivacyRaw = String(formData.get('legal_privacy_url') || '').trim();
+  const legalRefundRaw = String(formData.get('legal_refund_url') || '').trim();
+
+  const legalEmail = legalEmailRaw ? normalizeEmail(legalEmailRaw) : null;
+  if (legalEmailRaw && !legalEmail) {
+    return { error: 'Email legal invalido' } as GuidedLandingFormState;
+  }
+
+  const legalTermsUrl = legalTermsRaw ? normalizeUrl(legalTermsRaw) : null;
+  if (legalTermsRaw && !legalTermsUrl) {
+    return { error: 'URL de terminos invalida' } as GuidedLandingFormState;
+  }
+
+  const legalPrivacyUrl = legalPrivacyRaw ? normalizeUrl(legalPrivacyRaw) : null;
+  if (legalPrivacyRaw && !legalPrivacyUrl) {
+    return { error: 'URL de privacidad invalida' } as GuidedLandingFormState;
+  }
+
+  const legalRefundUrl = legalRefundRaw ? normalizeUrl(legalRefundRaw) : null;
+  if (legalRefundRaw && !legalRefundUrl) {
+    return { error: 'URL de devoluciones invalida' } as GuidedLandingFormState;
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' } as GuidedLandingFormState;
+
+  const { data: landing, error: landingError } = await supabase
+    .from('landing_pages')
+    .select('id, title, slug, content')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (landingError) return { error: 'Failed to load landing' } as GuidedLandingFormState;
+  if (!landing) return { error: 'Not found' } as GuidedLandingFormState;
+
+  const existingContent = asRecord(landing.content) || {};
+  const existingHero = asRecord(existingContent.hero) || {};
+  const existingSeo = asRecord(existingContent.seo) || {};
+  const existingLegal = asRecord(existingContent.legal) || {};
+
+  const fallbackDescription = typeof existingHero.subtitle === 'string'
+    ? existingHero.subtitle.trim()
+    : '';
+
+  const nextContent = {
+    ...existingContent,
+    seo: {
+      ...existingSeo,
+      title: seoTitle || existingSeo.title || landing.title,
+      description: seoDescription || existingSeo.description || fallbackDescription || 'Landing lista para convertir visitas en ventas.',
+    },
+    legal: {
+      ...existingLegal,
+      business_name: legalBusiness || existingLegal.business_name || landing.title,
+      contact_email: legalEmail || existingLegal.contact_email || null,
+      terms_url: legalTermsUrl || existingLegal.terms_url || null,
+      privacy_url: legalPrivacyUrl || existingLegal.privacy_url || null,
+      refund_url: legalRefundUrl || existingLegal.refund_url || null,
+      notice: existingLegal.notice || 'Consulta terminos, privacidad y devoluciones antes de comprar.',
+    },
+  };
+
+  const { error } = await supabase
+    .from('landing_pages')
+    .update({ status: 'published', content: nextContent })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) return { error: 'Failed to publish landing' } as GuidedLandingFormState;
+
+  revalidatePath('/landing');
+  if (landing.slug) {
+    revalidatePath(`/l/${landing.slug}`);
+  }
+  return { ok: true } as GuidedLandingFormState;
+}
+
+export async function updateLandingCheckoutFromForm(
+  _prevState: GuidedLandingFormState,
+  formData: FormData
+) {
+  const id = String(formData.get('id') || '').trim();
+  if (!id) {
+    return { error: 'Missing landing id' } as GuidedLandingFormState;
+  }
+
+  const enabled = String(formData.get('checkout_enabled') || '') === 'on';
+  const priceRaw = String(formData.get('checkout_price') || '').trim();
+  const productName = String(formData.get('checkout_product') || '').trim();
+  const source = String(formData.get('checkout_source') || '').trim();
+
+  const price = priceRaw ? normalizePrice(priceRaw) : null;
+  if (priceRaw && !price) {
+    return { error: 'Precio invalido' } as GuidedLandingFormState;
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' } as GuidedLandingFormState;
+
+  const { data: landing, error: landingError } = await supabase
+    .from('landing_pages')
+    .select('id, content')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (landingError) return { error: 'Failed to load landing' } as GuidedLandingFormState;
+  if (!landing) return { error: 'Not found' } as GuidedLandingFormState;
+
+  const existingContent = asRecord(landing.content) || {};
+  const existingProduct = asRecord(existingContent.product) || {};
+  const existingCheckout = asRecord(existingContent.checkout) || {};
+
+  const nextContent = {
+    ...existingContent,
+    product: {
+      ...existingProduct,
+      name: productName || existingProduct.name || '',
+      source: source || existingProduct.source || 'research',
+    },
+    checkout: {
+      ...existingCheckout,
+      enabled,
+      price_cop: price ?? existingCheckout.price_cop ?? null,
+      product_name: productName || existingCheckout.product_name || existingProduct.name || '',
+      source: source || existingCheckout.source || 'research',
+    },
+  };
+
+  const { error } = await supabase
+    .from('landing_pages')
+    .update({ content: nextContent })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) return { error: 'Failed to update checkout' } as GuidedLandingFormState;
 
   revalidatePath('/landing');
   return { ok: true } as GuidedLandingFormState;
