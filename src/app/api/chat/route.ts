@@ -790,6 +790,9 @@ export async function POST(req: Request) {
       });
     }
 
+    let researchContext = 'Sin datos externos disponibles.';
+    let researchResults: Array<Record<string, unknown>> = [];
+
     if (wantsLandingDraft) {
       if (!activeSessionId || !effectiveUserId) {
         return new Response(JSON.stringify({ content: 'Primero inicia una investigacion para crear la landing.' }), {
@@ -957,9 +960,6 @@ Responde solo con la clave exacta.
     } catch (err) {
       console.warn('/api/chat: router IA fallo, usando heuristica', err);
     }
-
-    let researchContext = 'Sin datos externos disponibles.';
-    let researchResults: Array<Record<string, unknown>> = [];
 
     try {
       const context = await tvly.search(`tendencia ${seedQuery} LATAM`, {
