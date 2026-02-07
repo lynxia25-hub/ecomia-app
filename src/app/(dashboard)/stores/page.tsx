@@ -4,7 +4,7 @@ import StoreCard from '@/components/stores/StoreCard';
 
 export default async function StoresPage() {
   const result = await listStores();
-  const stores = 'stores' in result ? result.stores : [];
+  const stores = 'stores' in result ? (result.stores || []) : [];
 
   return (
     <div className="p-6 space-y-8">
