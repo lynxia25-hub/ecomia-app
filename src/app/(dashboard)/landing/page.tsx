@@ -8,10 +8,11 @@ export default async function LandingGeneratorPage() {
   const result = await listLandingPages();
   const landingPages = 'landingPages' in result ? result.landingPages : [];
   const storeResult = await listStores();
-  const stores = 'stores' in storeResult ? storeResult.stores.map((store) => ({
+  const storeRows = 'stores' in storeResult ? (storeResult.stores || []) : [];
+  const stores = storeRows.map((store) => ({
     id: store.id,
     name: store.name,
-  })) : [];
+  }));
 
   return (
     <div className="min-h-screen p-6 space-y-10">
