@@ -265,7 +265,7 @@ export async function POST(req: Request) {
         title: z.string().optional(),
         url: z.string().optional(),
         summary: z.string().optional(),
-        data: z.record(z.any()).optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
       }),
       execute: async (params: any) => {
         if (!effectiveUserId) {
