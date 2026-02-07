@@ -6,7 +6,7 @@ import PuterLandingGenerator from '@/components/landing/PuterLandingGenerator';
 
 export default async function LandingGeneratorPage() {
   const result = await listLandingPages();
-  const landingPages = 'landingPages' in result ? result.landingPages : [];
+  const landingPages = 'landingPages' in result ? (result.landingPages || []) : [];
   const storeResult = await listStores();
   const storeRows = 'stores' in storeResult ? (storeResult.stores || []) : [];
   const stores = storeRows.map((store) => ({
