@@ -304,7 +304,7 @@ export async function POST(req: Request) {
         demand_level: z.string().optional(),
         competition_level: z.string().optional(),
         score: z.number().optional(),
-        meta: z.record(z.any()).optional(),
+        meta: z.record(z.string(), z.unknown()).optional(),
       }),
       execute: async (params: any) => {
         if (!effectiveUserId) {
@@ -351,7 +351,7 @@ export async function POST(req: Request) {
         contact: z.string().optional(),
         price_range: z.string().optional(),
         notes: z.string().optional(),
-        data: z.record(z.any()).optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
       }),
       execute: async (params: any) => {
         if (!effectiveUserId) {
@@ -431,7 +431,7 @@ export async function POST(req: Request) {
         candidate_id: z.string().optional(),
         asset_type: z.string().describe('Tipo de asset: image, copy, spec, etc'),
         url: z.string().optional(),
-        content: z.record(z.any()).optional(),
+        content: z.record(z.string(), z.unknown()).optional(),
       }),
       execute: async (params: any) => {
         if (!effectiveUserId) {
