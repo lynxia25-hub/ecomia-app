@@ -1,0 +1,56 @@
+
+> ecomia@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.0.10.26:3000
+- Environments: .env.local
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1700ms
+ GET / 200 in 3.0s (compile: 2.7s, proxy.ts: 110ms, render: 170ms)
+○ Compiling /login ...
+ GET /login 200 in 3.4s (compile: 3.3s, proxy.ts: 6ms, render: 45ms)
+ GET /login 200 in 27ms (compile: 4ms, proxy.ts: 5ms, render: 17ms)
+`x-forwarded-host` header with value `vigilant-engine-69xxpq5q6jprh47jv-3000.app.github.dev` does not match `origin` header with value `localhost:3000` from a forwarded Server Actions request. Aborting the action.
+⨯ Error: Invalid Server Actions request.
+    at ignore-listed frames {
+  digest: '1566214983@E80'
+}
+ POST /login 500 in 449ms (compile: 6ms, proxy.ts: 7ms, render: 435ms)
+ GET /chat 200 in 2.4s (compile: 2.1s, proxy.ts: 10ms, render: 280ms)
+/api/chat: mensajes recibidos (original): [
+  {
+    "parts": [
+      {
+        "type": "text",
+        "text": "hola"
+      }
+    ],
+    "id": "DGlBYPZbdrLsCzgE",
+    "role": "user"
+  }
+]
+/api/chat: transformando parts → { role: 'user', content: 'hola' }
+/api/chat: mensajes transformados finales: [
+  {
+    "role": "user",
+    "content": "hola"
+  }
+]
+/api/chat: streamText creado exitosamente
+Error [AI_APICallError]: Invalid API Key
+    at ignore-listed frames {
+  cause: undefined,
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  requestBodyValues: [Object],
+  statusCode: 401,
+  responseHeaders: [Object],
+  responseBody: '{"error":{"message":"Invalid API Key","type":"invalid_request_error","code":"invalid_api_key"}}\n',
+  isRetryable: false,
+  data: [Object]
+}
+ POST /api/chat 200 in 1354ms (compile: 1002ms, proxy.ts: 6ms, render: 346ms)
+[?25h

@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Falta landingId o storeId' }, { status: 400 });
   }
 
-  const origin = headers().get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
+  const origin = (await headers()).get('origin') || process.env.NEXT_PUBLIC_SITE_URL || '';
   const supabase = createServiceClient();
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();

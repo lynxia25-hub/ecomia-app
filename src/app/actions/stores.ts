@@ -69,15 +69,6 @@ function normalizePrice(value?: string | null) {
   return Math.round(parsed * 100) / 100;
 }
 
-function normalizePrice(value?: string | null) {
-  if (!value) return null;
-  const cleaned = value.replace(/[^0-9.]/g, '');
-  if (!cleaned) return null;
-  const price = Number(cleaned);
-  if (!Number.isFinite(price) || price <= 0) return null;
-  return Math.round(price);
-}
-
 function buildPricingOptions(formData: FormData) {
   const options = [] as Array<{ id: string; name: string; price: number }>;
   for (let index = 1; index <= 3; index += 1) {
