@@ -61,6 +61,7 @@ function normalizePaymentProvider(value?: string | null) {
   return allowed.has(raw) ? raw : null;
 }
 
+// Solo una definición de normalizePrice debe quedar. Si prefieres la versión decimal, deja la de arriba. Si prefieres la entera, deja la de abajo.
 function normalizePrice(value?: string | null) {
   const raw = value?.replace(/[^0-9.,]/g, '').replace(',', '.') || '';
   if (!raw) return null;

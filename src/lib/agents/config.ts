@@ -58,6 +58,8 @@ export const AGENT_CONFIGS: AgentConfig[] = [
   - Alternativa: [producto similar en tendencia].
 
   ### SIGUIENTE PASO
+  Pregunta breve para confirmar si el usuario quiere crear landing/tienda con este producto o comparar otra opcion.
+  `,
   Pregunta breve para confirmar si el usuario quiere crear landing/tienda con este producto o comparar otra opcion.`,
   },
   {
